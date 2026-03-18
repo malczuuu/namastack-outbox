@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: test-context2
+
+demo:
+  topic: customers-topic2

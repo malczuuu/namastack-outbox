@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: namastack-outbox-example-kafka-java-containers
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/demo
+    username: postgres
+    password: postgres
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+namastack:
+  outbox:
+    kafka:
+      default-topic: customers
+
+logging:
+  level:
+    root: warn
+    io.namastack: debug
+
+demo:
+  topic: customers-topic
