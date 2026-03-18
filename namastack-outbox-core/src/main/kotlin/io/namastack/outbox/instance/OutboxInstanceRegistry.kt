@@ -6,12 +6,14 @@ import io.namastack.outbox.instance.OutboxInstanceStatus.ACTIVE
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
+import org.springframework.context.SmartLifecycle
 import org.springframework.scheduling.annotation.Scheduled
 import java.net.InetAddress
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Registry service for managing outbox processor instances in a distributed system.
@@ -38,11 +40,13 @@ class OutboxInstanceRegistry(
     private val properties: OutboxProperties,
     private val clock: Clock,
     private val currentInstanceId: String = UUID.randomUUID().toString(),
-) {
+) : SmartLifecycle {
     private val log = LoggerFactory.getLogger(OutboxInstanceRegistry::class.java)
 
     private val staleInstanceTimeout = Duration.ofSeconds(properties.instance.staleInstanceTimeoutSeconds)
     private val gracefulShutdownTimeout = Duration.ofSeconds(properties.instance.gracefulShutdownTimeoutSeconds)
+
+    private val running = AtomicBoolean(false)
 
     /** Returns all active instances (status ACTIVE). */
     fun getActiveInstances(): List<OutboxInstance> = instanceRepository.findActiveInstances()
@@ -67,7 +71,7 @@ class OutboxInstanceRegistry(
      *
      * @throws Exception if registration fails
      */
-    @PostConstruct
+    // @PostConstruct
     fun registerInstance() {
         try {
             val hostname = InetAddress.getLocalHost().hostName
@@ -182,7 +186,7 @@ class OutboxInstanceRegistry(
      * to notice the status change, then removes it completely. This allows other instances
      * to redistribute work before shutdown completes.
      */
-    @PreDestroy
+    // @PreDestroy
     fun gracefulShutdown() {
         try {
             log.info("Initiating graceful shutdown for instance {}", currentInstanceId)
@@ -217,4 +221,21 @@ class OutboxInstanceRegistry(
         } catch (_: Exception) {
             8080
         }
+
+    //
+    // SmartLifecycle methods:
+
+    override fun start() {
+        registerInstance()
+        running.set(true)
+    }
+
+    override fun stop() {
+        running.set(false)
+        gracefulShutdown()
+    }
+
+    override fun isRunning(): Boolean {
+        return running.get()
+    }
 }

@@ -8,6 +8,7 @@ import io.namastack.outbox.trigger.OutboxPollingTrigger
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import org.slf4j.LoggerFactory
+import org.springframework.context.SmartLifecycle
 import org.springframework.core.task.TaskExecutor
 import org.springframework.scheduling.TaskScheduler
 import org.springframework.scheduling.support.ScheduledMethodRunnable
@@ -53,7 +54,7 @@ class OutboxProcessingScheduler(
     private val taskExecutor: TaskExecutor,
     private val properties: OutboxProperties,
     private val clock: Clock,
-) {
+) : SmartLifecycle {
     companion object {
         const val SCHEDULER_NAME: String = "outboxDefaultScheduler"
 
@@ -69,6 +70,7 @@ class OutboxProcessingScheduler(
     private val processingComplete = lock.newCondition()
     private val shuttingDown = AtomicBoolean(false)
     private val processingActive = AtomicBoolean(false)
+    private val running = AtomicBoolean(false)
 
     /**
      * Registers the outbox processing job with the task scheduler.
@@ -76,7 +78,7 @@ class OutboxProcessingScheduler(
      * Automatically invoked after dependency injection. Schedules [process] to run
      * according to the configured [trigger]. Idempotent - no duplicate scheduling.
      */
-    @PostConstruct
+    // @PostConstruct
     fun registerJob(): Unit =
         lock.withLock {
             if (scheduledTask != null) {
@@ -96,7 +98,7 @@ class OutboxProcessingScheduler(
      * new processing cycles, cancels the scheduled task, and waits for any currently
      * running cycle to complete (up to [OutboxProperties.Processing.shutdownTimeoutSeconds]).
      */
-    @PreDestroy
+    // @PreDestroy
     fun unregisterJob() {
         log.info("Initiating OutboxProcessingScheduler shutdown...")
 
@@ -233,4 +235,23 @@ class OutboxProcessingScheduler(
                 log.warn("Timeout after {}s, proceeding with shutdown", timeout)
             }
         }
+
+    //
+    // SmartLifecycle methods
+
+    override fun start() {
+        registerJob()
+        // "running" and "shuttingDown" - a single AtomicBoolean would be better?
+        running.set(true)
+        shuttingDown.set(false)
+    }
+
+    override fun stop() {
+        unregisterJob()
+        running.set(false)
+    }
+
+    override fun isRunning(): Boolean {
+        return running.get()
+    }
 }
